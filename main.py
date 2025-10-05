@@ -47,10 +47,13 @@ class GameScreen(Screen):
     @on(Input.Submitted, "#command_input")
     def handle_command(self, event: Input.Submitted) -> None:
         command = event.value.strip()
+        print(f"Command received: '{command}'")  # Debug
         if command == "/help":
             self.app.push_screen(HelpModal())
         elif command.startswith("/task add"):
             self.handle_task_add(command)
+        elif command.startswith("/task remove"):
+            self.handle_task_remove(command)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "back_btn":
@@ -73,6 +76,26 @@ class GameScreen(Screen):
         if task_list:
             task_list.add_task(description)
             self.query_one("#command_input").value = ""  # Clear input
+    
+    def handle_task_remove(self, command: str) -> None:
+        """Handle /task remove [task_id] command"""
+        # Extract task ID after "/task remove "
+        if not command.startswith("/task remove "):
+            self.app.bell()
+            return
+        
+        task_id = command[len("/task remove "):].strip().upper()
+        if not task_id:
+            self.app.bell()
+            return
+        
+        # Find the task list component and remove the task
+        task_list = self.query_one(".task_list", TaskListAP)
+        if task_list:
+            if task_list.remove_task(task_id):
+                self.query_one("#command_input").value = ""  # Clear input
+            else:
+                self.app.bell()  # Task not found
 
 class TaskListAP(Container):
     def __init__(self, *args, **kwargs):
@@ -81,7 +104,7 @@ class TaskListAP(Container):
             Task("T1", "Investigate B3", 1),
             Task("T2", "Fertilize D4", 1),
         ]
-        self.next_task_id = len(self.tasks) + 1  # Start from T4
+        self.next_task_id = len(self.tasks) + 1
     
     def compose(self) -> ComposeResult:
         yield Label("Tasks:", id="tasks_title")
@@ -119,6 +142,37 @@ class TaskListAP(Container):
             classes="task_grid_list"
         )
         self.mount(taskGrid)
+    
+    def remove_task(self, task_id: str) -> bool:
+        """Remove a task by ID, return True if successful"""
+        # Find the task to remove
+        task_to_remove = None
+        for task in self.tasks:
+            if task.id == task_id:
+                task_to_remove = task
+                break
+        
+        if not task_to_remove:
+            return False  # Task not found
+        
+        # Remove the task
+        self.tasks.remove(task_to_remove)
+        
+        # Refresh the task list display
+        self.query(".task_grid_list").remove()
+        
+        taskGrid = Grid(
+            *[widget for task in self.tasks 
+              for widget in (
+                  Label(task.id, classes="task_id"),
+                  Label(task.description, classes="task_desc"),
+                  Label(task.cost_str, classes="task_cost")
+              )],
+            classes="task_grid_list"
+        )
+        self.mount(taskGrid)
+        
+        return True  # Task successfully removed
 
 class CommandLine(Input):
     def compose(self) -> ComposeResult:
