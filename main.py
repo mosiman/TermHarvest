@@ -1,7 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalGroup, Container, Grid, VerticalScroll
 from textual.screen import Screen, ModalScreen
-from textual.widgets import Footer, Header, Label, Button, Rule, TextArea, Input
+from textual.widgets import Footer, Header, Label, Button, Rule, TextArea, Input, TabbedContent, TabPane
 from textual import on
 from dataclasses import dataclass
 from typing import List
@@ -34,15 +34,34 @@ class GameScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Container (
             Label(GAME_NAME, id="game_title"),
-            HorizontalGroup(
-                FarmPlotVisible(classes="farmplot"),
-                TaskListAP(classes="task_list"),
-                Journal(classes="journal_logs"),
-            ),
             Label("Farm sim vroom vroom brrrrrrrrr", id="game_subtitle"),
             Input(placeholder="/help for help", id="command_input"),
             Button("Back to title", id="back_btn"),
         )
+
+    def compose_tabs(self) -> ComposeResult:
+        """Compose tabbed content."""
+        with TabbedContent(id="tabs"):
+            with TabPane("Main", id="main_tab"):
+                yield HorizontalGroup(
+                    FarmPlotVisible(classes="farmplot"),
+                    TaskListAP(classes="task_list"),
+                    Journal(classes="journal_logs"),
+                )
+            with TabPane("Data", id="data_tab"):
+                yield Label("Data tab content coming soon...", id="data_placeholder")
+
+    def on_mount(self) -> None:
+        """Mount the tabbed content after the main container."""
+        # Get the container and insert tabs before the subtitle
+        container = self.query_one(Container)
+        tabs_container = Container(id="tabs_container")
+        
+        # Compose tabs into the tabs container
+        tabs_container.compose = self.compose_tabs
+        
+        # Insert tabs container after the title but before subtitle
+        container.mount(tabs_container, before="#game_subtitle")
 
     @on(Input.Submitted, "#command_input")
     def handle_command(self, event: Input.Submitted) -> None:
