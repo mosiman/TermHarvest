@@ -4,9 +4,16 @@ from textual.screen import Screen, ModalScreen
 from textual.widgets import Label, Button, Rule, Input, TabbedContent, TabPane
 from textual import on
 from dataclasses import dataclass
+from enum import Enum, auto
 
 import pyfiglet
 from aquacrop_manager import AquaCropManager
+
+
+class TaskType(Enum):
+    INVESTIGATE = auto()
+    IRRIGATE = auto()
+    PESTICIDE = auto()
 
 GAME_NAME = "FARMING SIM NAME TBD 2025"
 
@@ -15,6 +22,7 @@ class Task:
     id: str
     description: str
     cost: int
+    task_type: TaskType | None = None
     cost_str: str = ""
     
     def __post_init__(self):
