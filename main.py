@@ -3,6 +3,7 @@ from textual.containers import HorizontalGroup, VerticalGroup, Container, Grid, 
 from textual.screen import Screen, ModalScreen
 from textual.widgets import Label, Button, Rule, Input, TabbedContent, TabPane
 from textual import on
+from typing_extensions import override
 from dataclasses import dataclass
 from enum import Enum, auto
 
@@ -109,7 +110,7 @@ class GameScreen(Screen[object]):
                     Journal(classes="journal_logs"),
                 )
             with TabPane("Data", id="data_tab"):
-                yield Label("Data tab content coming soon...", id="data_placeholder")
+                yield WeatherWidget(aquacrop_manager, id="weather_widget")
 
     def on_mount(self) -> None:
         """Mount the tabbed content after the main container."""
@@ -121,6 +122,15 @@ class GameScreen(Screen[object]):
         
         # Update farm plot colors after mounting with a small delay
         self.set_timer(0.1, self.update_farm_plot_colors)
+        
+    @on(TabbedContent.TabActivated)
+    def on_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        """Handle tab activation events"""
+        if event.tab.id == "data_tab":
+            # Update weather data when data tab becomes active
+            weather_widget = self.query_one("#weather_widget", WeatherWidget)
+            if weather_widget:
+                weather_widget.update_weather_data()
     
     def update_farm_plot_colors(self) -> None:
         """Update farm plot colors after components are mounted"""
@@ -413,7 +423,7 @@ class TaskListAP(Container):
         
         # Update AP display instead of recreating it
         game_state = self.get_game_state()
-        ap_display = self.query_one("#ap_display")
+        ap_display = self.query_one("#ap_display", Label)
         if ap_display and game_state:
             ap_display.update(f"AP Used: {game_state.activity_points_used}/{game_state.max_activity_points}")
         
@@ -586,6 +596,60 @@ class ActivityPointsModal(ModalScreen[object]):
     @on(Button.Pressed, "#ok_btn")
     def close_modal(self) -> None:
         self.app.pop_screen()
+
+
+class WeatherWidget(Container):
+    """Widget to display weather information"""
+    
+    def __init__(self, aquacrop_manager: AquaCropManager, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.aquacrop_manager: AquaCropManager = aquacrop_manager
+    
+    @override
+    def compose(self) -> ComposeResult:
+        yield Label("Weather Data", id="weather_title")
+        yield VerticalGroup(
+            Label("Previous session temperature: Loading...", id="prev_temp_label"),
+            Label("Previous session precipitation: Loading...", id="prev_precip_label"),
+            Label("Forecasted precipitation: Loading...", id="forecast_precip_label"),
+            Label("Forecasted temperature range: Loading...", id="forecast_temp_label"),
+            id="weather_data_group"
+        )
+    
+    def on_mount(self) -> None:
+        """Update weather data when widget is mounted"""
+        self.update_weather_data()
+    
+    def update_weather_data(self) -> None:
+        """Update weather data display"""
+        # Get the game state
+        gs = self.get_game_state()
+
+        prev, forecast = gs.aquacrop_manager.weather_data()
+
+        # Update labels
+        prev_temp_label = self.query_one("#prev_temp_label", Label)
+        prev_precip_label = self.query_one("#prev_precip_label", Label)
+        forecast_precip_label = self.query_one("#forecast_precip_label", Label)
+        forecast_temp_label = self.query_one("#forecast_temp_label", Label)
+
+        if prev:
+            prev_temp_label.update(f"Previous session temperature: {prev.min_temp:.1f}°C to {prev.max_temp:.1f}°C")
+            prev_precip_label.update(f"Previous session precipitation: {prev.precipitation:.1f} mm")
+        
+        forecast_precip_label.update(f"Forecasted precipitation: {forecast.precipitation:.1f} mm")
+        forecast_temp_label.update(f"Temperature range: {forecast.min_temp:.1f}°C to {forecast.max_temp:.1f}°C")
+
+    def get_game_state(self) -> GameState | None:
+        """Get the current game state from parent screen"""
+        screen = self.screen
+        if screen and hasattr(screen, 'query_one'):
+            try:
+                date_display = screen.query_one("#date_season_display", DateSeasonDisplay)
+                return date_display.game_state
+            except Exception:
+                return None
+        return None
 
 
 class FarmingSimApp(App[object]):

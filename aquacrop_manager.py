@@ -5,7 +5,10 @@ import logging
 import itertools
 import random
 
+from datetime import datetime, timedelta
+
 import numpy as np
+import pandas as pd
 
 
 @dataclass
@@ -14,15 +17,25 @@ class FarmSector:
     sector_id: str
     canopy_cover_history: list[float]
 
+@dataclass
+class SessionWeather:
+    session_date: datetime
+    min_temp: float
+    max_temp: float
+    precipitation: float
 
 class AquaCropManager:
     def __init__(self, grid_size: tuple[int, int] = (4, 4)):
         self.grid_size: tuple[int, int] = grid_size
         self.sectors: dict[str, FarmSector] = {}
         self.taw_penalty: float = 0.03 # takes two /steps before somewhat visible via canopy cover
+        self.session_days: int = 30 # each "/step" is 30 days
+        self.previous_session: datetime | None = None
+        self.current_session: datetime
         self.dry_sectors: list[str] = []
         self.pest_sectors: list[str] = []
         self.logger: logging.Logger
+        self.weather: pd.DataFrame
         self.setup_logging()
         self.initialize_farm()
 
@@ -77,6 +90,8 @@ class AquaCropManager:
         
         alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+        self.weather = weather_data
+
         # Pick two random sectors to have bad_soil_type
         all_points = [(i, j) for i in range(self.grid_size[0]) for j in range(self.grid_size[1])]
         dry_sectors_xy: list[tuple[int,int]] = random.sample(all_points, 2)
@@ -102,6 +117,8 @@ class AquaCropManager:
                 )
                 model._initialize()
                 self.sectors[sector_id] = FarmSector(model, sector_id, [])
+
+        self.current_session = self.get_session_date()
         
         initial_canopy_cover = self.get_current_canopy_cover()
         self.logger.info("Farm initialized - Initial canopy cover: %s", 
@@ -125,6 +142,8 @@ class AquaCropManager:
                     sector.canopy_cover_history.append(canopy_cover)
             
         
+        # Update session
+        self.current_session = self.get_session_date()
         # Log final canopy cover after all days
         canopy_cover = self.get_current_canopy_cover()
         biomass = self.get_current_biomass()
@@ -165,6 +184,11 @@ class AquaCropManager:
         first_sector = next(iter(self.sectors.values()))
         # Season counter starts at 0, so add 1 for display
         return first_sector.model._clock_struct.season_counter + 1
+
+    def get_session_date(self) -> datetime:
+        first_sector = next(iter(self.sectors.values()))
+        step_start_time: datetime = first_sector.model._clock_struct.step_start_time.to_pydatetime()
+        return step_start_time
     
     def get_current_date(self) -> str:
         """Get current date from the first sector's model"""
@@ -177,3 +201,156 @@ class AquaCropManager:
         except AttributeError:
             # Fallback if timestamp is not a datetime-like object
             return "1979-10-01"
+
+    def weather_data(self) -> tuple[SessionWeather | None, SessionWeather]:
+        # Return the previous session weather
+        # Return the forecasted high / lows (add a fudge factor)
+
+        wdf = self.weather
+
+        # If no previous session, don't return data for that
+        if self.previous_session is None:
+            prevSessionWeather = None
+        else:
+            prevSessionWeatherDf = wdf[
+                (wdf['Date'] >= previous_session) & 
+                (wdf['Date'] <= current_session)
+            ]
+            # Calculate the statistics
+            lowest_low: float = prevSessionWeatherDf['MinTemp'].min()
+            highest_high: float = prevSessionWeatherDf['MaxTemp'].max()
+            precipitation_sum: float = prevSessionWeatherDf['Precipitation'].sum()
+
+            # Create the dataclass instance
+            prevSessionWeather = SessionWeather(
+                session_date=self.previous_session,
+                min_temp=lowest_low,
+                max_temp=highest_high,
+                precipitation=precipitation_sum
+            )
+
+
+        # For forecasts, take the average min, average max, and avg precipitation * session step length
+        forecastSessionWeatherDf = wdf[
+            (wdf['Date'] > self.current_session) & 
+            (wdf['Date'] <= self.current_session + timedelta(days=self.session_days))
+        ]
+        # Calculate the statistics
+
+        forecast_low: float = np.average(forecastSessionWeatherDf['MinTemp'])
+        forecast_high: float = np.average(forecastSessionWeatherDf['MaxTemp'])
+        forecast_precip: float = np.average(forecastSessionWeatherDf['Precipitation']) * 30
+
+        forecastSessionWeather = SessionWeather(
+            session_date=self.current_session,
+            min_temp=forecast_low,
+            max_temp=forecast_high,
+            precipitation=forecast_precip
+        )
+
+        return (prevSessionWeather, forecastSessionWeather)
+
+
+    def get_current_weather(self) -> dict[str, float]:
+        """Get current weather data from the first sector's model"""
+        if not self.sectors:
+            return {"precipitation": 0.0, "min_temp": 0.0, "max_temp": 0.0, "et0": 0.0}
+        
+        first_sector = next(iter(self.sectors.values()))
+        return {
+            "precipitation": first_sector.model._init_cond.precipitation,
+            "min_temp": first_sector.model._init_cond.temp_min,
+            "max_temp": first_sector.model._init_cond.temp_max,
+            "et0": first_sector.model._init_cond.et0
+        }
+
+    def get_weather_forecast(self, days: int = 30) -> list[dict[str, float]]:
+        """Get weather forecast for the next specified number of days"""
+        if not self.sectors:
+            return []
+        
+        first_sector = next(iter(self.sectors.values()))
+        
+        # Check if model is properly initialized
+        if not hasattr(first_sector.model, '_clock_struct') or not hasattr(first_sector.model, '_param_struct'):
+            self.logger.warning("Model not properly initialized for weather forecast")
+            return self._get_sample_weather_forecast(days)
+        
+        current_step = first_sector.model._clock_struct.time_step_counter
+        weather_data = first_sector.model.weather_df
+        
+        # Debug logging
+        self.logger.debug(f"Weather forecast: current_step={current_step}, weather_data_length={len(weather_data)}")
+        
+        # If we're at the end of the simulation, return empty forecast
+        if current_step >= len(weather_data):
+            self.logger.warning(f"Current step {current_step} exceeds weather data length {len(weather_data)}")
+            return []
+        
+        forecast = []
+        for i in range(current_step, min(current_step + days, len(weather_data))):
+            row = weather_data.iloc[i]
+            forecast.append({
+                "min_temp": float(row["MinTemp"]),
+                "max_temp": float(row["MaxTemp"]),
+                "precipitation": float(row["Precipitation"]),
+                "et0": float(row["ReferenceET"])
+            })
+        
+        self.logger.debug(f"Weather forecast result: {len(forecast)} days")
+        return forecast
+    
+    def _get_sample_weather_forecast(self, days: int = 30) -> list[dict[str, float]]:
+        """Get sample weather forecast from the initial weather data"""
+        try:
+            from aquacrop.utils import prepare_weather, get_filepath
+            weather_data = prepare_weather(get_filepath('tunis_climate.txt'))
+            
+            forecast = []
+            for i in range(min(days, len(weather_data))):
+                row = weather_data.iloc[i]
+                forecast.append({
+                    "min_temp": float(row["MinTemp"]),
+                    "max_temp": float(row["MaxTemp"]),
+                    "precipitation": float(row["Precipitation"]),
+                    "et0": float(row["ReferenceET"])
+                })
+            
+            self.logger.debug(f"Sample weather forecast: {len(forecast)} days")
+            return forecast
+        except Exception as e:
+            self.logger.error(f"Error getting sample weather forecast: {e}")
+            return []
+
+    def get_previous_session_precipitation(self) -> float:
+        """Get total precipitation from the previous simulation session (30 days)"""
+        if not self.sectors:
+            return 0.0
+        
+        first_sector = next(iter(self.sectors.values()))
+        
+        # Check if model is properly initialized
+        if not hasattr(first_sector.model, '_clock_struct') or not hasattr(first_sector.model, '_param_struct'):
+            self.logger.warning("Model not properly initialized for precipitation data")
+            return 0.0
+        
+        current_step = first_sector.model._clock_struct.time_step_counter
+        
+        # Debug logging
+        self.logger.debug(f"Previous precipitation: current_step={current_step}")
+        
+        # If this is the first session, return 0
+        if current_step <= 30:
+            self.logger.debug("First session, returning 0 precipitation")
+            return 0.0
+        
+        weather_data = first_sector.model.weather_df
+        
+        # Sum precipitation from previous 30 days
+        total_precip = 0.0
+        start_step = max(0, current_step - 30)
+        for i in range(start_step, current_step):
+            total_precip += float(weather_data.iloc[i]["Precipitation"])
+        
+        self.logger.debug(f"Previous precipitation total: {total_precip}")
+        return total_precip
