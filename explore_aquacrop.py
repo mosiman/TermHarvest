@@ -113,6 +113,32 @@ def model_pest_infestation_via_canopy_cover():
 
     print(model._outputs.final_stats)
 
+def run_model_for_steps(model: AquaCropModel | None, steps: int = 50):
+    if model is None:
+        filepath=get_filepath('tunis_climate.txt')
+        weather_data = prepare_weather(filepath)
+        sandy_loam = Soil(soil_type='SandyLoam')
+        wheat = Crop('Wheat', planting_date='10/01')
+        InitWC = InitialWaterContent(value=['FC'])
+        model = AquaCropModel(sim_start_time=f'{1979}/10/01',
+                              sim_end_time=f'{1985}/05/30',
+                              weather_df=weather_data,
+                              soil=sandy_loam,
+                              crop=wheat,
+                              initial_water_content=InitWC)
+        model._initialize()
+    canopy_cover_dmg = 0.05 # 5% canopy cover loss per day
+    infestation_day = 60
+    i = 0
+    while not model._clock_struct.model_is_finished:
+        if i > steps:
+            break
+        _ = model._perform_timestep()
+        i += 1
+
+    print(model._outputs.final_stats)
+    return model
+
 
 
 
