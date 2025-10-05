@@ -49,10 +49,30 @@ class GameScreen(Screen):
         command = event.value.strip()
         if command == "/help":
             self.app.push_screen(HelpModal())
+        elif command.startswith("/task add"):
+            self.handle_task_add(command)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "back_btn":
             self.app.pop_screen()
+    
+    def handle_task_add(self, command: str) -> None:
+        """Handle /task add [description] command"""
+        # Extract everything after "/task add "
+        if not command.startswith("/task add "):
+            self.app.bell()  # Alert sound for invalid command
+            return
+        
+        description = command[len("/task add "):].strip()
+        if not description:
+            self.app.bell()
+            return
+        
+        # Find the task list component and add the task
+        task_list = self.query_one(".task_list", TaskListAP)
+        if task_list:
+            task_list.add_task(description)
+            self.query_one("#command_input").value = ""  # Clear input
 
 class TaskListAP(Container):
     def __init__(self, *args, **kwargs):
@@ -60,8 +80,8 @@ class TaskListAP(Container):
         self.tasks = [
             Task("T1", "Investigate B3", 1),
             Task("T2", "Fertilize D4", 1),
-            Task("T3", "Irrigate ALL 20mm", 2)
         ]
+        self.next_task_id = 4  # Start from T4
     
     def compose(self) -> ComposeResult:
         yield Label("Tasks:", id="tasks_title")
@@ -76,6 +96,29 @@ class TaskListAP(Container):
             classes="task_grid_list"
         )
         yield taskGrid
+    
+    def add_task(self, description: str) -> None:
+        """Add a new task with the given description"""
+        # Simple task cost calculation - could be enhanced
+        cost = 2 if "irrigate" in description.lower() else 1
+        
+        new_task = Task(f"T{self.next_task_id}", description, cost)
+        self.tasks.append(new_task)
+        self.next_task_id += 1
+        
+        # Refresh the task list display
+        self.query(".task_grid_list").remove()
+        
+        taskGrid = Grid(
+            *[widget for task in self.tasks 
+              for widget in (
+                  Label(task.id, classes="task_id"),
+                  Label(task.description, classes="task_desc"),
+                  Label(task.cost_str, classes="task_cost")
+              )],
+            classes="task_grid_list"
+        )
+        self.mount(taskGrid)
 
 class CommandLine(Input):
     def compose(self) -> ComposeResult:
