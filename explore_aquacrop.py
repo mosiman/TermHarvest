@@ -113,6 +113,22 @@ def model_pest_infestation_via_canopy_cover():
 
     print(model._outputs.final_stats)
 
+def baseline_specify_soiltype(soil_type: str):
+    filepath=get_filepath('tunis_climate.txt')
+    weather_data = prepare_weather(filepath)
+    sandy_loam = Soil(soil_type=soil_type)
+    wheat = Crop('Wheat', planting_date='10/01')
+    InitWC = InitialWaterContent(value=['FC'])
+    model = AquaCropModel(sim_start_time=f'{1979}/10/01',
+                          sim_end_time=f'{1985}/05/30',
+                          weather_df=weather_data,
+                          soil=sandy_loam,
+                          crop=wheat,
+                          initial_water_content=InitWC)
+    model.run_model(till_termination=True)
+    print(f"Average dry yield: {np.average(model._outputs.final_stats["Dry yield (tonne/ha)"])}") # 8.800
+    return model
+
 def run_model_for_steps(model: AquaCropModel | None, steps: int = 50):
     if model is None:
         filepath=get_filepath('tunis_climate.txt')
