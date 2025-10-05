@@ -24,6 +24,7 @@ class Task:
     cost: int
     task_type: TaskType | None = None
     cost_str: str = ""
+    added_date: str = ""
     
     def __post_init__(self):
         self.cost_str = f"{self.cost} AP"
@@ -36,6 +37,8 @@ class GameState:
     season_str: str = ""
     current_season: int = 1
     previous_season: int = 1
+    activity_points_used: int = 0
+    max_activity_points: int = 4
     
     def __post_init__(self):
         self.update_from_aquacrop()
@@ -50,6 +53,18 @@ class GameState:
     def season_changed(self) -> bool:
         """Check if season has changed since last update"""
         return self.current_season != self.previous_season
+    
+    def reset_activity_points(self) -> None:
+        """Reset activity points at the start of each simulation step"""
+        self.activity_points_used = 0
+    
+    def can_add_task(self, task_cost: int) -> bool:
+        """Check if a task can be added without exceeding AP limit"""
+        return self.activity_points_used + task_cost <= self.max_activity_points
+    
+    def add_activity_points(self, cost: int) -> None:
+        """Add activity points used"""
+        self.activity_points_used += cost
 
 
 class TitlePage(Screen[object]):
@@ -198,8 +213,16 @@ class GameScreen(Screen[object]):
     def handle_step_simulation(self) -> None:
         """Handle /step command - advance simulation by 30 days"""
         game_state = self.query_one("#date_season_display", DateSeasonDisplay).game_state
+        
+        # Get current tasks before resetting
+        task_list = self.query_one(".task_list", TaskListAP)
+        tasks_with_dates = [(game_state.date_str, task.description) for task in task_list.tasks] if task_list else []
+        
         game_state.aquacrop_manager.step_simulation(30)
         game_state.update_from_aquacrop()
+        
+        # Reset activity points for new step
+        game_state.reset_activity_points()
         
         # Update the display label
         date_season_label = self.query_one("#date_season_label", Label)
@@ -210,6 +233,15 @@ class GameScreen(Screen[object]):
         if farm_plot:
             farm_plot.update_sector_colors()
         
+        # Add journal entries for tasks (grouped by date)
+        if tasks_with_dates:
+            self.add_journal_entries(tasks_with_dates)
+        
+        # Clear tasks for next step
+        if task_list:
+            task_list.tasks.clear()
+            task_list.refresh_task_display()
+        
         # Check if season changed and show modal
         if game_state.season_changed():
             self.app.push_screen(SeasonStatsModal(game_state.current_season))
@@ -217,6 +249,21 @@ class GameScreen(Screen[object]):
         command_input = self.query_one("#command_input", Input)
         command_input.value = ""  # Clear input
         print("Simulation stepped forward 30 days")
+    
+    def add_journal_entries(self, tasks_with_dates: list[tuple[str, str]]) -> None:
+        """Add journal entries grouped by date"""
+        journal = self.query_one(".journal_logs", Journal)
+        if journal:
+            # Group tasks by date
+            tasks_by_date: dict[str, list[str]] = {}
+            for date_str, task_desc in tasks_with_dates:
+                if date_str not in tasks_by_date:
+                    tasks_by_date[date_str] = []
+                tasks_by_date[date_str].append(task_desc)
+            
+            # Add entries for each date
+            for date_str, tasks in tasks_by_date.items():
+                journal.add_entry(date_str, tasks)
 
     def handle_show_canopy(self) -> None:
         """Handle /canopy command - show current canopy cover values"""
@@ -238,14 +285,17 @@ class GameScreen(Screen[object]):
 class TaskListAP(Container):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.tasks = [
-            Task("T1", "Investigate B3", 1),
-            Task("T2", "Fertilize D4", 1),
-        ]
-        self.next_task_id = len(self.tasks) + 1
+        self.tasks: list[Task] = []
+        self.next_task_id = 1
     
     def compose(self) -> ComposeResult:
         yield Label("Tasks:", id="tasks_title")
+        
+        # Add AP usage display
+        game_state = self.get_game_state()
+        if game_state:
+            yield Label(f"AP Used: {game_state.activity_points_used}/{game_state.max_activity_points}", 
+                       id="ap_display")
         
         taskGrid = Grid(
             *[widget for task in self.tasks 
@@ -258,28 +308,47 @@ class TaskListAP(Container):
         )
         yield taskGrid
     
-    def add_task(self, description: str) -> None:
-        """Add a new task with the given description"""
-        # Simple task cost calculation - could be enhanced
-        cost = 2 if "irrigate" in description.lower() else 1
+    def get_game_state(self) -> GameState | None:
+        """Get the current game state from parent screen"""
+        screen = self.screen
+        if screen and hasattr(screen, 'query_one'):
+            try:
+                date_display = screen.query_one("#date_season_display", DateSeasonDisplay)
+                return date_display.game_state
+            except Exception:
+                return None
+        return None
+    
+    def add_task(self, description: str, task_type: TaskType | None = None, cost: int = 1) -> bool:
+        """Add a new task with validation, return True if successful"""
+        game_state = self.get_game_state()
         
-        new_task = Task(f"T{self.next_task_id}", description, cost)
+        # Check if task can be added without exceeding AP limit
+        if game_state and not game_state.can_add_task(cost):
+            self.app.bell()  # Alert for AP limit exceeded
+            # Show error modal
+            self.app.push_screen(ActivityPointsModal(
+                game_state.activity_points_used,
+                game_state.max_activity_points,
+                cost
+            ))
+            return False
+        
+        # Get current date for journal
+        current_date = game_state.date_str if game_state else ""
+        
+        new_task = Task(f"T{self.next_task_id}", description, cost, task_type, current_date)
         self.tasks.append(new_task)
         self.next_task_id += 1
         
-        # Refresh the task list display
-        self.query(".task_grid_list").remove()
+        # Add activity points
+        if game_state:
+            game_state.add_activity_points(cost)
         
-        taskGrid = Grid(
-            *[widget for task in self.tasks 
-              for widget in (
-                  Label(task.id, classes="task_id"),
-                  Label(task.description, classes="task_desc"),
-                  Label(task.cost_str, classes="task_cost")
-              )],
-            classes="task_grid_list"
-        )
-        self.mount(taskGrid)
+        # Refresh the task list display
+        self.refresh_task_display()
+        
+        return True
     
     def remove_task(self, task_id: str) -> bool:
         """Remove a task by ID, return True if successful"""
@@ -293,12 +362,30 @@ class TaskListAP(Container):
         if not task_to_remove:
             return False  # Task not found
         
-        # Remove the task
+        # Remove the task and refund AP
         self.tasks.remove(task_to_remove)
         
+        game_state = self.get_game_state()
+        if game_state:
+            game_state.activity_points_used = max(0, game_state.activity_points_used - task_to_remove.cost)
+        
         # Refresh the task list display
+        self.refresh_task_display()
+        
+        return True  # Task successfully removed
+    
+    def refresh_task_display(self) -> None:
+        """Refresh the entire task list display including AP counter"""
+        # Remove existing displays
         self.query(".task_grid_list").remove()
         
+        # Update AP display instead of recreating it
+        game_state = self.get_game_state()
+        ap_display = self.query_one("#ap_display")
+        if ap_display and game_state:
+            ap_display.update(f"AP Used: {game_state.activity_points_used}/{game_state.max_activity_points}")
+        
+        # Add task grid
         taskGrid = Grid(
             *[widget for task in self.tasks 
               for widget in (
@@ -309,8 +396,6 @@ class TaskListAP(Container):
             classes="task_grid_list"
         )
         self.mount(taskGrid)
-        
-        return True  # Task successfully removed
 
 class CommandLine(Input):
     def compose(self) -> ComposeResult:
@@ -318,20 +403,36 @@ class CommandLine(Input):
 
 
 class JournalEntry(VerticalGroup):
+    def __init__(self, date_str: str, tasks: list[str], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.date_str = date_str
+        self.tasks = tasks
+    
     def compose(self) -> ComposeResult:
         yield Rule()
-        yield Label("2025-01-01")
+        yield Label(self.date_str)
         yield Rule()
-        yield Label("Investigate B3: Found pests!")
-        yield Label("Fertilized D4")
-        yield Label("Irrigate ALL 20mm")
+        for task in self.tasks:
+            yield Label(f"- {task}")
 
 class Journal(VerticalScroll):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.entries: list[JournalEntry] = []
+    
     def compose(self) -> ComposeResult:
-        yield JournalEntry()
-        yield JournalEntry()
-        yield JournalEntry()
-        yield JournalEntry()
+        for entry in self.entries:
+            yield entry
+    
+    def add_entry(self, date_str: str, tasks: list[str]) -> None:
+        """Add a new journal entry"""
+        new_entry = JournalEntry(date_str, tasks)
+        self.entries.append(new_entry)
+        
+        # Refresh journal display
+        self.query(JournalEntry).remove()
+        for entry in self.entries:
+            self.mount(entry)
 
 class FarmPlotVisible(Grid):
     """ The farm plot is hardcoded to be 4x4 for the purposes of this hackathon """
@@ -420,6 +521,32 @@ class SeasonStatsModal(ModalScreen[object]):
             VerticalGroup(
                 Label("Detailed statistics will be added here"),
                 Label("Canopy cover averages, yield data, etc."),
+            ),
+            Button("OK", id="ok_btn"),
+        )
+
+    @on(Button.Pressed, "#ok_btn")
+    def close_modal(self) -> None:
+        self.app.pop_screen()
+
+
+class ActivityPointsModal(ModalScreen[object]):
+    """Modal screen showing activity points exceeded error"""
+    
+    def __init__(self, current_ap: int, max_ap: int, task_cost: int, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_ap: int = current_ap
+        self.max_ap: int = max_ap
+        self.task_cost: int = task_cost
+    
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Label("Activity Points Exceeded", id="ap_error_title"),
+            VerticalGroup(
+                Label(f"Current AP used: {self.current_ap}/{self.max_ap}"),
+                Label(f"Task cost: {self.task_cost} AP"),
+                Label("This task would exceed your activity point limit for this session."),
+                Label("Remove some tasks or wait until the next simulation step."),
             ),
             Button("OK", id="ok_btn"),
         )
