@@ -1,6 +1,8 @@
 #titlepage_menu_btns_grp {
     width: auto;
     background: $boost;
+    margin-top: 2;
+    /* padding: 1; */
 }
 
 #titlescreen {
@@ -9,55 +11,114 @@
     align: center middle;
 }
 
+#title_label {
+    text-align: center;
+    margin-bottom: 2;
+}
+
 #game_title {
     width: 100%;
     height: auto;
-    border: solid green;
+    border: solid $accent;
     align: center middle;
-    content-align-horizontal: center;
+    content-align: center middle;
+    padding: 1;
+    margin-bottom: 1;
+}
+
+#game_subtitle {
+    width: 100%;
+    text-align: center;
+    margin-top: 1;
+    color: $text-muted;
 }
 
 .task_list {
-    border: solid orange;
-    width: 30%;
-    height: 50%;
+    border: solid $warning;
+    min-width: 5%;
+    max-width: 15%;
+    height: 60%;
+    min-height: 15;
+    margin: 1;
+    padding: 1;
+}
+
+#tasks_title {
+    text-style: bold;
+    margin-bottom: 1;
 }
 
 JournalEntry {
-    border: solid blue;
+    border: solid $primary;
+    margin-bottom: 1;
+    padding: 1;
 }
 
 Journal {
-    height: 50%;
+    height: 60%;
+    min-height: 15;
+    min-width: 15%;
+    max-width: 20%;
+    margin: 1;
+    padding: 1;
 }
 
 .task_grid_list {
     layout: grid;
     grid-size: 3 4;
-    grid-rows: 2 2 2 2;
-    grid-columns: 1fr 1fr 1fr;
+    grid-rows: 1fr 1fr 1fr 1fr;
+    grid-columns: 1fr 3fr 1fr;
     width: 100%;
-    height: 100%;
+    height: auto;
+    min-height: 12;
+    grid-gutter: 1;
+}
 
+.task_id, .task_cost {
+    text-style: bold;
+    color: $success;
 }
 
 .farmplot {
     layout: grid;
     grid-size: 4 4;
-    grid-rows: 5 5 5 5 ;
-    grid-columns: 10 10 10 10;
+    grid-rows: 1fr 1fr 1fr 1fr;
+    grid-columns: 1fr 1fr 1fr 1fr;
     width: auto;
+    min-width: 20%;
     height: auto;
-    border: solid yellow;  /* Optional: to see the grid boundaries */
+    min-height: 20;
+    border: solid green;
+    margin: 1;
+    padding: 1;
+    grid-gutter: 1;
 }
 
 .sector {
-    height: 100%;  /* Fill the grid cell */
-    width: 100%;   /* Fill the grid cell */
-    border: solid green;
-    background: blue;
-    color: white;  /* Make text visible on blue background */
-    content-align: center middle;  /* Center the text */
+    height: 100%;
+    width: 100%;
+    min-height: 4;
+    min-width: 4;
+    border: solid $primary;
+    background: $surface;
+    color: $text;
+    content-align: center middle;
+    padding: 1;
+}
+
+.sector:hover {
+    background: $primary-lighten-2;
+    color: $text;
+}
+
+#command_input {
+    margin: 1;
+    width: 80%;
+}
+
+#back_btn {
+    margin: 1;
+    width: auto;
 }
 
 HelpModal {
@@ -65,21 +126,24 @@ HelpModal {
 }
 
 HelpModal > Container {
-    width: 60%;
+    width: 70%;
     height: auto;
     background: $surface;
     border: solid $accent;
-    padding: 1;
+    padding: 2;
+    min-width: 40;
+    max-width: 60;
 }
 
 #help_title {
     width: 100%;
     text-align: center;
     text-style: bold;
-    margin-bottom: 1;
+    margin-bottom: 2;
 }
 
 #ok_btn {
-    margin-top: 1;
+    margin-top: 2;
     width: auto;
+    align-horizontal: center;
 }

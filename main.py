@@ -80,27 +80,6 @@ class Journal(VerticalScroll):
         yield JournalEntry()
         yield JournalEntry()
         yield JournalEntry()
-        
-class FarmPlotVisibleBad(Grid):
-    """ The farm plot is hardcoded to be 4x4 for the purposes of this hackathon """
-
-    def compose(self) -> ComposeResult:
-        yield Label("A1", id="farmplot_A1", classes="sector")
-        yield Label("A2", id="farmplot_A2", classes="sector")
-        yield Label("A3", id="farmplot_A3", classes="sector")
-        yield Label("A4", id="farmplot_A4", classes="sector")
-        yield Label("B1", id="farmplot_B1", classes="sector")
-        yield Label("B2", id="farmplot_B2", classes="sector")
-        yield Label("B3", id="farmplot_B3", classes="sector")
-        yield Label("B4", id="farmplot_B4", classes="sector")
-        yield Label("C1", id="farmplot_C1", classes="sector")
-        yield Label("C2", id="farmplot_C2", classes="sector")
-        yield Label("C3", id="farmplot_C3", classes="sector")
-        yield Label("C4", id="farmplot_C4", classes="sector")
-        yield Label("D1", id="farmplot_D1", classes="sector")
-        yield Label("D2", id="farmplot_D2", classes="sector")
-        yield Label("D3", id="farmplot_D3", classes="sector")
-        yield Label("D4", id="farmplot_D4", classes="sector")
 
 class FarmPlotVisible(Grid):
     """ The farm plot is hardcoded to be 4x4 for the purposes of this hackathon """
@@ -110,13 +89,13 @@ class FarmPlotVisible(Grid):
         height = 4
         width = 4
 
-        self.grid = [
+        grid = [
             [ Label(f"{row}{col}", id=f"farmplot_{row}{col}", classes="sector") for col in range(1,width+1)]
             for row in alphabet[0:height]
         ]
         for r in range(0, height):
             for c in range(0, width):
-                yield self.grid[r][c]
+                yield grid[r][c]
 
 class HelpModal(ModalScreen):
     """Modal screen showing available commands"""
