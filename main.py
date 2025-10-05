@@ -5,8 +5,6 @@ from textual.widgets import Label, Button, Rule, Input, TabbedContent, TabPane
 from textual import on
 from dataclasses import dataclass
 
-from datetime import date
-
 import pyfiglet
 from aquacrop_manager import AquaCropManager
 
@@ -25,15 +23,17 @@ class Task:
 
 @dataclass
 class GameState:
-    current_date: date
-    current_season: int
     aquacrop_manager: AquaCropManager
     date_str: str = ""
     season_str: str = ""
     
     def __post_init__(self):
-        self.date_str = self.current_date.strftime("%Y-%m-%d")
-        self.season_str = f"Season {self.current_season}"
+        self.update_from_aquacrop()
+    
+    def update_from_aquacrop(self) -> None:
+        """Update date and season from aquacrop manager"""
+        self.date_str = self.aquacrop_manager.get_current_date()
+        self.season_str = f"Season {self.aquacrop_manager.get_current_season()}"
 
 
 class TitlePage(Screen[object]):
@@ -58,7 +58,7 @@ class DateSeasonDisplay(Container):
 class GameScreen(Screen[object]):
     def compose(self) -> ComposeResult:
         aquacrop_manager = AquaCropManager()
-        game_state = GameState(date(2025,1,1), 1, aquacrop_manager)
+        game_state = GameState(aquacrop_manager)
         yield Container (
             Label(GAME_NAME, id="game_title"),
             DateSeasonDisplay(game_state, id="date_season_display"),
@@ -172,6 +172,12 @@ class GameScreen(Screen[object]):
         """Handle /step command - advance simulation by 30 days"""
         game_state = self.query_one("#date_season_display", DateSeasonDisplay).game_state
         game_state.aquacrop_manager.step_simulation(30)
+        game_state.update_from_aquacrop()
+        
+        # Update the display label
+        date_season_label = self.query_one("#date_season_label", Label)
+        date_season_label.update(f"{game_state.date_str} | {game_state.season_str}")
+        
         command_input = self.query_one("#command_input", Input)
         command_input.value = ""  # Clear input
         print("Simulation stepped forward 30 days")

@@ -90,3 +90,23 @@ class AquaCropManager:
         """Get current canopy cover for each sector"""
         return {sector_id: sector.model._init_cond.canopy_cover 
                 for sector_id, sector in self.sectors.items()}
+    
+    def get_current_season(self) -> int:
+        """Get current season from the first sector's model"""
+        if not self.sectors:
+            return 1
+        first_sector = next(iter(self.sectors.values()))
+        # Season counter starts at 0, so add 1 for display
+        return first_sector.model._clock_struct.season_counter + 1
+    
+    def get_current_date(self) -> str:
+        """Get current date from the first sector's model"""
+        if not self.sectors:
+            return "1979-10-01"
+        first_sector = next(iter(self.sectors.values()))
+        timestamp = first_sector.model._clock_struct.step_start_time
+        try:
+            return timestamp.strftime("%Y-%m-%d")
+        except AttributeError:
+            # Fallback if timestamp is not a datetime-like object
+            return "1979-10-01"
