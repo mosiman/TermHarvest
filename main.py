@@ -1,7 +1,8 @@
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalGroup, Container, Grid, VerticalScroll
-from textual.screen import Screen
+from textual.screen import Screen, ModalScreen
 from textual.widgets import Footer, Header, Label, Button, Rule, TextArea, Input
+from textual import on
 
 import pyfiglet
 
@@ -28,9 +29,15 @@ class GameScreen(Screen):
                 Journal(classes="journal_logs"),
             ),
             Label("Farm sim vroom vroom brrrrrrrrr", id="game_subtitle"),
-            Input(placeholder="/help for help"),
+            Input(placeholder="/help for help", id="command_input"),
             Button("Back to title", id="back_btn"),
         )
+
+    @on(Input.Submitted, "#command_input")
+    def handle_command(self, event: Input.Submitted) -> None:
+        command = event.value.strip()
+        if command == "/help":
+            self.app.push_screen(HelpModal())
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "back_btn":
@@ -110,6 +117,26 @@ class FarmPlotVisible(Grid):
         for r in range(0, height):
             for c in range(0, width):
                 yield self.grid[r][c]
+
+class HelpModal(ModalScreen):
+    """Modal screen showing available commands"""
+    
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Label("Available Commands", id="help_title"),
+            VerticalGroup(
+                Label("/help - Show this help dialog"),
+                Label("/inspect [plot] - Inspect a farm plot"),
+                Label("/fertilize [plot] - Fertilize a plot"),
+                Label("/irrigate [amount] - Irrigate all plots"),
+            ),
+            Button("OK", id="ok_btn"),
+        )
+
+    @on(Button.Pressed, "#ok_btn")
+    def close_modal(self) -> None:
+        self.app.pop_screen()
+
 
 class FarmingSimApp(App):
     """ An interactive game for the 2025 NASA SpaceApps """

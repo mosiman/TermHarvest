@@ -59,3 +59,27 @@ Journal {
     color: white;  /* Make text visible on blue background */
     content-align: center middle;  /* Center the text */
 }
+
+HelpModal {
+    align: center middle;
+}
+
+HelpModal > Container {
+    width: 60%;
+    height: auto;
+    background: $surface;
+    border: solid $accent;
+    padding: 1;
+}
+
+#help_title {
+    width: 100%;
+    text-align: center;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#ok_btn {
+    margin-top: 1;
+    width: auto;
+}
