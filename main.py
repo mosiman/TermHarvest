@@ -5,6 +5,7 @@ from textual.widgets import Footer, Header, Label, Button, Rule, TextArea, Input
 from textual import on
 from dataclasses import dataclass
 from typing import List
+from datetime import date
 
 import pyfiglet
 
@@ -15,12 +16,25 @@ class Task:
     id: str
     description: str
     cost: int
+    cost_str: str = ""
     
     def __post_init__(self):
         self.cost_str = f"{self.cost} AP"
 
 
-class TitlePage(Screen):
+@dataclass
+class GameState:
+    current_date: date
+    current_season: int
+    date_str: str = ""
+    season_str: str = ""
+    
+    def __post_init__(self):
+        self.date_str = self.current_date.strftime("%Y-%m-%d")
+        self.season_str = f"Season {self.current_season}"
+
+
+class TitlePage(Screen[object]):
     def compose(self) -> ComposeResult:
         title_fig = pyfiglet.figlet_format(GAME_NAME)
         yield Label(title_fig, id="title_label")
@@ -30,11 +44,21 @@ class TitlePage(Screen):
         if event.button.id == "start_btn":
             self.app.push_screen(GameScreen())
 
-class GameScreen(Screen):
+class DateSeasonDisplay(Container):
+    def __init__(self, game_state: GameState, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.game_state: GameState = game_state
+    
     def compose(self) -> ComposeResult:
+        yield Label(f"{self.game_state.date_str} | {self.game_state.season_str}", id="date_season_label")
+
+
+class GameScreen(Screen[object]):
+    def compose(self) -> ComposeResult:
+        game_state = GameState(date(2025,1,1), 1)
         yield Container (
             Label(GAME_NAME, id="game_title"),
-            Label("Farm sim vroom vroom brrrrrrrrr", id="game_subtitle"),
+            DateSeasonDisplay(game_state, id="date_season_display"),
             Input(placeholder="/help for help", id="command_input"),
             Button("Back to title", id="back_btn"),
         )
@@ -53,15 +77,11 @@ class GameScreen(Screen):
 
     def on_mount(self) -> None:
         """Mount the tabbed content after the main container."""
-        # Get the container and insert tabs before the subtitle
+        # Get the container and mount tabbed content
         container = self.query_one(Container)
         tabs_container = Container(id="tabs_container")
-        
-        # Compose tabs into the tabs container
         tabs_container.compose = self.compose_tabs
-        
-        # Insert tabs container after the title but before subtitle
-        container.mount(tabs_container, before="#game_subtitle")
+        container.mount(tabs_container, after="#game_title")
 
     def handle_tab_switch(self, command: str) -> None:
         """Handle /tab [tab_name] command"""
@@ -252,7 +272,7 @@ class FarmPlotVisible(Grid):
             for c in range(0, width):
                 yield grid[r][c]
 
-class HelpModal(ModalScreen):
+class HelpModal(ModalScreen[object]):
     """Modal screen showing available commands"""
     
     def compose(self) -> ComposeResult:
@@ -272,7 +292,7 @@ class HelpModal(ModalScreen):
         self.app.pop_screen()
 
 
-class FarmingSimApp(App):
+class FarmingSimApp(App[object]):
     """ An interactive game for the 2025 NASA SpaceApps """
 
     CSS_PATH = "fs.tcss"

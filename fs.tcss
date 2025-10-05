@@ -23,13 +23,21 @@
     align: center middle;
     content-align: center middle;
     padding: 1;
-    margin-bottom: 1;
+    margin-bottom: 0;
 }
 
-#game_subtitle {
+#date_season_display {
     width: 100%;
+    height: auto;
+    align: center middle;
+    content-align: center middle;
+    padding: 0;
+    background: $surface;
+}
+
+#date_season_label {
     text-align: center;
-    margin-top: 1;
+    text-style: bold;
     color: $text-muted;
 }
 
