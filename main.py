@@ -1,13 +1,14 @@
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalGroup, Container, Grid, VerticalScroll
 from textual.screen import Screen, ModalScreen
-from textual.widgets import Footer, Header, Label, Button, Rule, TextArea, Input, TabbedContent, TabPane
+from textual.widgets import Label, Button, Rule, Input, TabbedContent, TabPane
 from textual import on
 from dataclasses import dataclass
-from typing import List
+
 from datetime import date
 
 import pyfiglet
+from aquacrop_manager import AquaCropManager
 
 GAME_NAME = "FARMING SIM NAME TBD 2025"
 
@@ -26,6 +27,7 @@ class Task:
 class GameState:
     current_date: date
     current_season: int
+    aquacrop_manager: AquaCropManager
     date_str: str = ""
     season_str: str = ""
     
@@ -55,7 +57,8 @@ class DateSeasonDisplay(Container):
 
 class GameScreen(Screen[object]):
     def compose(self) -> ComposeResult:
-        game_state = GameState(date(2025,1,1), 1)
+        aquacrop_manager = AquaCropManager()
+        game_state = GameState(date(2025,1,1), 1, aquacrop_manager)
         yield Container (
             Label(GAME_NAME, id="game_title"),
             DateSeasonDisplay(game_state, id="date_season_display"),
@@ -99,7 +102,8 @@ class GameScreen(Screen[object]):
         
         if tab_name in valid_tabs:
             tabs.active = valid_tabs[tab_name]
-            self.query_one("#command_input").value = ""  # Clear input
+            command_input = self.query_one("#command_input", Input)
+            command_input.value = ""  # Clear input
         else:
             self.app.bell()  # Invalid tab name
 
@@ -109,6 +113,10 @@ class GameScreen(Screen[object]):
         print(f"Command received: '{command}'")  # Debug
         if command == "/help":
             self.app.push_screen(HelpModal())
+        elif command == "/step":
+            self.handle_step_simulation()
+        elif command == "/canopy":
+            self.handle_show_canopy()
         elif command.startswith("/task add"):
             self.handle_task_add(command)
         elif command.startswith("/task remove"):
@@ -136,7 +144,8 @@ class GameScreen(Screen[object]):
         task_list = self.query_one(".task_list", TaskListAP)
         if task_list:
             task_list.add_task(description)
-            self.query_one("#command_input").value = ""  # Clear input
+            command_input = self.query_one("#command_input", Input)
+            command_input.value = ""  # Clear input
     
     def handle_task_remove(self, command: str) -> None:
         """Handle /task remove [task_id] command"""
@@ -154,9 +163,30 @@ class GameScreen(Screen[object]):
         task_list = self.query_one(".task_list", TaskListAP)
         if task_list:
             if task_list.remove_task(task_id):
-                self.query_one("#command_input").value = ""  # Clear input
+                command_input = self.query_one("#command_input", Input)
+                command_input.value = ""  # Clear input
             else:
                 self.app.bell()  # Task not found
+
+    def handle_step_simulation(self) -> None:
+        """Handle /step command - advance simulation by 30 days"""
+        game_state = self.query_one("#date_season_display", DateSeasonDisplay).game_state
+        game_state.aquacrop_manager.step_simulation(30)
+        command_input = self.query_one("#command_input", Input)
+        command_input.value = ""  # Clear input
+        print("Simulation stepped forward 30 days")
+
+    def handle_show_canopy(self) -> None:
+        """Handle /canopy command - show current canopy cover values"""
+        game_state = self.query_one("#date_season_display", DateSeasonDisplay).game_state
+        canopy_cover = game_state.aquacrop_manager.get_current_canopy_cover()
+        
+        print("Current Canopy Cover Values:")
+        for sector_id, cover in canopy_cover.items():
+            print(f"{sector_id}: {cover:.3f}")
+        
+        command_input = self.query_one("#command_input", Input)
+        command_input.value = ""  # Clear input
 
 class TaskListAP(Container):
     def __init__(self, *args, **kwargs):
@@ -280,6 +310,8 @@ class HelpModal(ModalScreen[object]):
             Label("Available Commands", id="help_title"),
             VerticalGroup(
                 Label("/help - Show this help dialog"),
+                Label("/step - Advance simulation by 30 days"),
+                Label("/canopy - Show current canopy cover values"),
                 Label("/inspect [plot] - Inspect a farm plot"),
                 Label("/fertilize [plot] - Fertilize a plot"),
                 Label("/irrigate [amount] - Irrigate all plots"),
