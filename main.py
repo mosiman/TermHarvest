@@ -81,7 +81,7 @@ class TaskListAP(Container):
             Task("T1", "Investigate B3", 1),
             Task("T2", "Fertilize D4", 1),
         ]
-        self.next_task_id = 4  # Start from T4
+        self.next_task_id = len(self.tasks) + 1  # Start from T4
     
     def compose(self) -> ComposeResult:
         yield Label("Tasks:", id="tasks_title")
