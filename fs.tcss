@@ -156,6 +156,27 @@ HelpModal > Container {
     align-horizontal: center;
 }
 
+SeasonStatsModal {
+    align: center middle;
+}
+
+SeasonStatsModal > Container {
+    width: 70%;
+    height: auto;
+    background: $surface;
+    border: solid $accent;
+    padding: 2;
+    min-width: 40;
+    max-width: 60;
+}
+
+#season_stats_title {
+    width: 100%;
+    text-align: center;
+    text-style: bold;
+    margin-bottom: 2;
+}
+
 #tabs_container {
     width: 100%;
     height: 60%;

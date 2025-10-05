@@ -26,14 +26,22 @@ class GameState:
     aquacrop_manager: AquaCropManager
     date_str: str = ""
     season_str: str = ""
+    current_season: int = 1
+    previous_season: int = 1
     
     def __post_init__(self):
         self.update_from_aquacrop()
     
     def update_from_aquacrop(self) -> None:
         """Update date and season from aquacrop manager"""
+        self.previous_season = self.current_season
+        self.current_season = self.aquacrop_manager.get_current_season()
         self.date_str = self.aquacrop_manager.get_current_date()
-        self.season_str = f"Season {self.aquacrop_manager.get_current_season()}"
+        self.season_str = f"Season {self.current_season}"
+    
+    def season_changed(self) -> bool:
+        """Check if season has changed since last update"""
+        return self.current_season != self.previous_season
 
 
 class TitlePage(Screen[object]):
@@ -193,6 +201,10 @@ class GameScreen(Screen[object]):
         farm_plot = self.query_one(".farmplot", FarmPlotVisible)
         if farm_plot:
             farm_plot.update_sector_colors()
+        
+        # Check if season changed and show modal
+        if game_state.season_changed():
+            self.app.push_screen(SeasonStatsModal(game_state.current_season))
         
         command_input = self.query_one("#command_input", Input)
         command_input.value = ""  # Clear input
@@ -378,6 +390,28 @@ class HelpModal(ModalScreen[object]):
                 Label("/inspect [plot] - Inspect a farm plot"),
                 Label("/fertilize [plot] - Fertilize a plot"),
                 Label("/irrigate [amount] - Irrigate all plots"),
+            ),
+            Button("OK", id="ok_btn"),
+        )
+
+    @on(Button.Pressed, "#ok_btn")
+    def close_modal(self) -> None:
+        self.app.pop_screen()
+
+
+class SeasonStatsModal(ModalScreen[object]):
+    """Modal screen showing season statistics"""
+    
+    def __init__(self, season_number: int, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.season_number: int = season_number
+    
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Label(f"Season {self.season_number -1} Summary", id="season_stats_title"),
+            VerticalGroup(
+                Label("Detailed statistics will be added here"),
+                Label("Canopy cover averages, yield data, etc."),
             ),
             Button("OK", id="ok_btn"),
         )
