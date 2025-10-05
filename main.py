@@ -63,6 +63,26 @@ class GameScreen(Screen):
         # Insert tabs container after the title but before subtitle
         container.mount(tabs_container, before="#game_subtitle")
 
+    def handle_tab_switch(self, command: str) -> None:
+        """Handle /tab [tab_name] command"""
+        if not command.startswith("/tab "):
+            self.app.bell()  # Alert sound for invalid command
+            return
+        
+        tab_name = command[len("/tab "):].strip().lower()
+        
+        # Get the TabbedContent widget
+        tabs = self.query_one("#tabs", TabbedContent)
+        
+        # Validate tab name and switch
+        valid_tabs = {"main": "main_tab", "data": "data_tab"}
+        
+        if tab_name in valid_tabs:
+            tabs.active = valid_tabs[tab_name]
+            self.query_one("#command_input").value = ""  # Clear input
+        else:
+            self.app.bell()  # Invalid tab name
+
     @on(Input.Submitted, "#command_input")
     def handle_command(self, event: Input.Submitted) -> None:
         command = event.value.strip()
@@ -73,6 +93,8 @@ class GameScreen(Screen):
             self.handle_task_add(command)
         elif command.startswith("/task remove"):
             self.handle_task_remove(command)
+        elif command.startswith("/tab"):
+            self.handle_tab_switch(command)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "back_btn":
