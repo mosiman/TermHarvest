@@ -68,10 +68,12 @@ class GameScreen(Screen[object]):
 
     def compose_tabs(self) -> ComposeResult:
         """Compose tabbed content."""
+        aquacrop_manager = self.query_one("#date_season_display", DateSeasonDisplay).game_state.aquacrop_manager
+        
         with TabbedContent(id="tabs"):
             with TabPane("Main", id="main_tab"):
                 yield HorizontalGroup(
-                    FarmPlotVisible(classes="farmplot"),
+                    FarmPlotVisible(aquacrop_manager, classes="farmplot"),
                     TaskListAP(classes="task_list"),
                     Journal(classes="journal_logs"),
                 )
@@ -85,6 +87,15 @@ class GameScreen(Screen[object]):
         tabs_container = Container(id="tabs_container")
         tabs_container.compose = self.compose_tabs
         container.mount(tabs_container, after="#game_title")
+        
+        # Update farm plot colors after mounting with a small delay
+        self.set_timer(0.1, self.update_farm_plot_colors)
+    
+    def update_farm_plot_colors(self) -> None:
+        """Update farm plot colors after components are mounted"""
+        farm_plot = self.query_one(".farmplot", FarmPlotVisible)
+        if farm_plot:
+            farm_plot.update_sector_colors()
 
     def handle_tab_switch(self, command: str) -> None:
         """Handle /tab [tab_name] command"""
@@ -178,6 +189,11 @@ class GameScreen(Screen[object]):
         date_season_label = self.query_one("#date_season_label", Label)
         date_season_label.update(f"{game_state.date_str} | {game_state.season_str}")
         
+        # Update farm plot colors
+        farm_plot = self.query_one(".farmplot", FarmPlotVisible)
+        if farm_plot:
+            farm_plot.update_sector_colors()
+        
         command_input = self.query_one("#command_input", Input)
         command_input.value = ""  # Clear input
         print("Simulation stepped forward 30 days")
@@ -190,6 +206,11 @@ class GameScreen(Screen[object]):
         print("Current Canopy Cover Values:")
         for sector_id, cover in canopy_cover.items():
             print(f"{sector_id}: {cover:.3f}")
+        
+        # Update farm plot colors
+        farm_plot = self.query_one(".farmplot", FarmPlotVisible)
+        if farm_plot:
+            farm_plot.update_sector_colors()
         
         command_input = self.query_one("#command_input", Input)
         command_input.value = ""  # Clear input
@@ -295,6 +316,10 @@ class Journal(VerticalScroll):
 class FarmPlotVisible(Grid):
     """ The farm plot is hardcoded to be 4x4 for the purposes of this hackathon """
 
+    def __init__(self, aquacrop_manager: AquaCropManager, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.aquacrop_manager = aquacrop_manager
+
     def compose(self) -> ComposeResult:
         alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         height = 4
@@ -307,6 +332,38 @@ class FarmPlotVisible(Grid):
         for r in range(0, height):
             for c in range(0, width):
                 yield grid[r][c]
+        
+        # Initial color update
+        self.update_sector_colors()
+
+    def interpolate_color(self, value: float) -> str:
+        """Interpolate between #b49850 (0.0) and #4b702e (1.0) based on canopy cover"""
+        # Convert hex colors to RGB components
+        start_color = (0xb4, 0x98, 0x50)  # #b49850
+        end_color = (0x4b, 0x70, 0x2e)    # #4b702e
+        
+        # Clamp value between 0 and 1
+        value = max(0.0, min(1.0, value))
+        
+        # Interpolate each RGB component
+        r = int(start_color[0] + (end_color[0] - start_color[0]) * value)
+        g = int(start_color[1] + (end_color[1] - start_color[1]) * value)
+        b = int(start_color[2] + (end_color[2] - start_color[2]) * value)
+        
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def update_sector_colors(self) -> None:
+        """Update sector background colors based on canopy cover values"""
+        canopy_cover = self.aquacrop_manager.get_current_canopy_cover()
+        
+        for sector_id, cover_value in canopy_cover.items():
+            try:
+                sector_widget = self.query_one(f"#farmplot_{sector_id}", Label)
+                color = self.interpolate_color(cover_value)
+                sector_widget.styles.background = color
+            except Exception:
+                # Widget might not be mounted yet
+                pass
 
 class HelpModal(ModalScreen[object]):
     """Modal screen showing available commands"""
