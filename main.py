@@ -10,6 +10,19 @@ from enum import Enum, auto
 import pyfiglet
 from aquacrop_manager import AquaCropManager
 
+import numpy as np
+
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('log.txt')
+    ]
+)
+log = logging.getLogger(__name__)
+
 
 class TaskType(Enum):
     INVESTIGATE = auto()
@@ -42,6 +55,7 @@ class GameState:
     max_activity_points: int = 4
     
     def __post_init__(self):
+        log.info("GameState post init")
         self.update_from_aquacrop()
     
     def update_from_aquacrop(self) -> None:
@@ -110,7 +124,10 @@ class GameScreen(Screen[object]):
                     Journal(classes="journal_logs"),
                 )
             with TabPane("Data", id="data_tab"):
-                yield WeatherWidget(aquacrop_manager, id="weather_widget")
+                yield HorizontalGroup(
+                    WeatherWidget(aquacrop_manager, id="weather_widget"),
+                    NDVIDataWidget(aquacrop_manager, id="ndvi_widget", classes="ndviplot"),
+                )
 
     def on_mount(self) -> None:
         """Mount the tabbed content after the main container."""
@@ -122,6 +139,7 @@ class GameScreen(Screen[object]):
         
         # Update farm plot colors after mounting with a small delay
         self.set_timer(0.1, self.update_farm_plot_colors)
+        self.set_timer(0.1, self.update_ndvi_plot_colors)
         
     @on(TabbedContent.TabActivated)
     def on_tab_activated(self, event: TabbedContent.TabActivated) -> None:
@@ -134,9 +152,17 @@ class GameScreen(Screen[object]):
     
     def update_farm_plot_colors(self) -> None:
         """Update farm plot colors after components are mounted"""
+        log.info("Updating farm plot colours")
         farm_plot = self.query_one(".farmplot", FarmPlotVisible)
         if farm_plot:
             farm_plot.update_sector_colors()
+
+    def update_ndvi_plot_colors(self) -> None:
+        """Update farm plot colors after components are mounted"""
+        log.info("Updating ndvi plot colours")
+        ndvi_plot = self.query_one(".ndviplot", NDVIDataWidget)
+        if ndvi_plot:
+            ndvi_plot.update_sector_colors()
 
     def handle_tab_switch(self, command: str) -> None:
         """Handle /tab [tab_name] command"""
@@ -274,6 +300,11 @@ class GameScreen(Screen[object]):
         farm_plot = self.query_one(".farmplot", FarmPlotVisible)
         if farm_plot:
             farm_plot.update_sector_colors()
+
+        # Update ndvi plot colors
+        ndvi_plot = self.query_one(".ndviplot", NDVIDataWidget)
+        if ndvi_plot:
+            ndvi_plot.update_sector_colors()
         
         # Add journal entries for tasks (grouped by date)
         if tasks_with_dates:
@@ -475,6 +506,77 @@ class Journal(VerticalScroll):
         self.query(JournalEntry).remove()
         for entry in self.entries:
             self.mount(entry)
+
+class NDVIDataWidget(Grid):
+    """ The farm plot is hardcoded to be 4x4 for the purposes of this hackathon """
+
+    def __init__(self, aquacrop_manager: AquaCropManager, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.aquacrop_manager = aquacrop_manager
+
+    def compose(self) -> ComposeResult:
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        height = 4
+        width = 4
+
+        cc = self.aquacrop_manager.get_current_canopy_cover()
+
+        grid = [
+                [ Label(f"{cc[row + str(col)]:.1f}", id=f"ndviplot_{row}{col}", classes="sector") for col in range(1,width+1)]
+            for row in alphabet[0:height]
+        ]
+        for r in range(0, height):
+            for c in range(0, width):
+                yield grid[r][c]
+        
+        # Initial color update
+        self.update_sector_colors()
+
+    def interpolate_color(self, value: float) -> str:
+        """Interpolate between #b49850 (0.0) and #4b702e (1.0) based on canopy cover"""
+        # Convert hex colors to RGB components
+        start_color = (0xb4, 0x98, 0x50)  # #b49850
+        end_color = (0x4b, 0x70, 0x2e)    # #4b702e
+        
+        # Clamp value between 0 and 1
+        value = max(0.0, min(1.0, value))
+        
+        # Interpolate each RGB component
+        r = int(start_color[0] + (end_color[0] - start_color[0]) * value)
+        g = int(start_color[1] + (end_color[1] - start_color[1]) * value)
+        b = int(start_color[2] + (end_color[2] - start_color[2]) * value)
+        
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def update_sector_colors(self) -> None:
+
+        below_median_colour = "#8b2323"
+        median_colour = "#897600"
+        above_median_colour = "#44b342"
+
+        """Update sector background colors based on canopy cover values"""
+        log.info("updating sector colours for ndvi")
+        canopy_cover = self.aquacrop_manager.get_current_canopy_cover()
+        log.info(f"canopy cover: {canopy_cover}")
+
+        median_cc = np.median([cover_value for _, cover_value in canopy_cover.items()])
+        log.info(f"canop median: {median_cc}")
+
+        for sector_id, cover_value in canopy_cover.items():
+            try:
+                sector_widget = self.query_one(f"#ndviplot_{sector_id}", Label)
+                if cover_value < median_cc:
+                    sector_widget.styles.background = below_median_colour
+                elif cover_value > median_cc:
+                    sector_widget.styles.background = above_median_colour
+                else:
+                    sector_widget.styles.background = median_colour
+
+                sector_widget.content = f"{cover_value:.1f}"
+            except Exception:
+                # Widget might not be mounted yet
+                pass
+
 
 class FarmPlotVisible(Grid):
     """ The farm plot is hardcoded to be 4x4 for the purposes of this hackathon """

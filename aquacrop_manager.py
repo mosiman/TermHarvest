@@ -147,10 +147,6 @@ class AquaCropManager:
         # Log final canopy cover after all days
         canopy_cover = self.get_current_canopy_cover()
         biomass = self.get_current_biomass()
-
-        # self.logger.info("Simulation complete - Final canopy cover: %s", 
-        #                {s_id: f"{cover:.3f}" for s_id, cover in final_canopy_cover.items()})
-
         pretty_canopy = self.print_sector_values(canopy_cover)
         pretty_biomass = self.print_sector_values(biomass)
         self.logger.info("========== SIMULATION COMPLETE ==========")
