@@ -171,23 +171,55 @@ class GameScreen(Screen[object]):
             self.app.pop_screen()
     
     def handle_task_add(self, command: str) -> None:
-        """Handle /task add [description] command"""
-        # Extract everything after "/task add "
+        """Handle /task add [type] [params] command"""
         if not command.startswith("/task add "):
             self.app.bell()  # Alert sound for invalid command
             return
         
-        description = command[len("/task add "):].strip()
-        if not description:
+        # Extract everything after "/task add "
+        params = command[len("/task add "):].strip()
+        if not params:
             self.app.bell()
+            return
+        
+        # Parse the task type and parameters
+        parts = params.split()
+        task_type = parts[0].lower()
+        
+        # Handle different task types
+        if task_type == "investigate" and len(parts) >= 2:
+            sector_id = parts[1].upper()
+            description = f"Investigate {sector_id}"
+            cost = 1
+            task_type_enum = TaskType.INVESTIGATE
+        
+        elif task_type == "irrigate" and len(parts) >= 3:
+            sectors = parts[1].upper()
+            try:
+                amount = int(parts[2])
+                description = f"Irrigate {sectors} {amount}mm"
+                cost = 2
+                task_type_enum = TaskType.IRRIGATE
+            except ValueError:
+                self.app.bell()
+                return
+        
+        elif task_type == "pesticide" and len(parts) >= 2:
+            sector_id = parts[1].upper()
+            description = f"Pesticide {sector_id}"
+            cost = 1
+            task_type_enum = TaskType.PESTICIDE
+        
+        else:
+            self.app.bell()  # Invalid command format
             return
         
         # Find the task list component and add the task
         task_list = self.query_one(".task_list", TaskListAP)
         if task_list:
-            task_list.add_task(description)
-            command_input = self.query_one("#command_input", Input)
-            command_input.value = ""  # Clear input
+            if task_list.add_task(description, task_type_enum, cost):
+                command_input = self.query_one("#command_input", Input)
+                command_input.value = ""  # Clear input
     
     def handle_task_remove(self, command: str) -> None:
         """Handle /task remove [task_id] command"""
