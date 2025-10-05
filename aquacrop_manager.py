@@ -29,11 +29,13 @@ class AquaCropManager:
         self.grid_size: tuple[int, int] = grid_size
         self.sectors: dict[str, FarmSector] = {}
         self.taw_penalty: float = 0.03 # takes two /steps before somewhat visible via canopy cover
+        self.cc_penalty: float = 0.03
+        self.cc_penalty_start: int = 50 # starts 50 days into growing season (dap)
         self.session_days: int = 30 # each "/step" is 30 days
         self.previous_session: datetime | None = None
         self.current_session: datetime
-        self.dry_sectors: list[str] = []
-        self.pest_sectors: list[str] = []
+        self.dry_sectors: list[str] = [] # uses taw_penalty
+        self.pest_sectors: list[str] = [] # uses cc_penalty
         self.logger: logging.Logger
         self.weather: pd.DataFrame
         self.setup_logging()
@@ -95,6 +97,7 @@ class AquaCropManager:
         # Pick two random sectors to have bad_soil_type
         all_points = [(i, j) for i in range(self.grid_size[0]) for j in range(self.grid_size[1])]
         dry_sectors_xy: list[tuple[int,int]] = random.sample(all_points, 2)
+        pest_sectors_xy: list[tuple[int,int]] = random.sample(all_points, 1)
 
         
         for row in range(self.grid_size[0]):
@@ -102,16 +105,15 @@ class AquaCropManager:
                 sector_id = f"{alphabet[row]}{col+1}"
                 if (row,col) in dry_sectors_xy:
                     self.dry_sectors.append(sector_id)
-                    soil_type = bad_soil_type
-                    # make it even worse by reducing the holding capacity?. via reducing field capacity.
                     self.logger.info(f"Sector {sector_id} will have taw penalties on every step")
-                else:
-                    soil_type = default_soil_type
+                if (row,col) in pest_sectors_xy:
+                    self.pest_sectors.append(sector_id)
+                    self.logger.info(f"Sector {sector_id} will have cc penalties after {self.cc_penalty_start}")
                 model = AquaCropModel(
                     sim_start_time='1979/10/01',
                     sim_end_time='1985/05/30',
                     weather_df=weather_data,
-                    soil=soil_type,
+                    soil=default_soil_type,
                     crop=wheat,
                     initial_water_content=InitWC
                 )
@@ -137,6 +139,13 @@ class AquaCropManager:
                         old_th = sector.model._init_cond.th
                         sector.model._init_cond.th = sector.model._init_cond.th * (1 - self.taw_penalty)
                         self.logger.debug(f"Sector {sector.sector_id} TAW debuff. Old: {old_th} new: {sector.model._init_cond.th}")
+                    if (sector.sector_id in self.pest_sectors) and (sector.model._init_cond.dap > self.cc_penalty_start):
+                        # Lose a percentage of canopy cover due to pest infestation
+                        old_cc = sector.model._init_cond.canopy_cover
+                        new_cc = old_cc * (1 - self.cc_penalty)
+                        sector.model._init_cond.canopy_cover = new_cc
+                        self.logger.debug(f"Sector {sector.sector_id} CC debuff. Old: {old_cc} new: {new_cc}")
+
                     sector.model._perform_timestep()
                     canopy_cover = sector.model._init_cond.canopy_cover
                     sector.canopy_cover_history.append(canopy_cover)
@@ -170,7 +179,7 @@ class AquaCropManager:
 
     def get_current_hydration(self) -> dict[str, float]:
         """Get top level theta (hydration) for each sector"""
-        return {sector_id: sector.model._init_cond.th[0]
+        return {sector_id: sector.model._init_cond.th[0] # top level moisture level
                 for sector_id, sector in self.sectors.items()}
     
     def get_current_season(self) -> int:

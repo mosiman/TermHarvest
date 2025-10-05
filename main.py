@@ -549,8 +549,8 @@ class SoilMoistureWidget(Grid):
         
         # typical theta 0.2 - 0.5
         # Clamp value between 0 and 1
-        value = max(0.1, min(0.5, value))
-        normalized_value = (value - 0.1) / (0.5 - 0.1)
+        value = max(0.1, min(0.2, value))
+        normalized_value = (value - 0.1) / (0.2 - 0.1)
         
         # Interpolate each RGB component
         r = int(start_color[0] + (end_color[0] - start_color[0]) * normalized_value)
