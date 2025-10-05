@@ -3,10 +3,21 @@ from textual.containers import HorizontalGroup, VerticalGroup, Container, Grid, 
 from textual.screen import Screen, ModalScreen
 from textual.widgets import Footer, Header, Label, Button, Rule, TextArea, Input
 from textual import on
+from dataclasses import dataclass
+from typing import List
 
 import pyfiglet
 
 GAME_NAME = "FARMING SIM NAME TBD 2025"
+
+@dataclass
+class Task:
+    id: str
+    description: str
+    cost: int
+    
+    def __post_init__(self):
+        self.cost_str = f"{self.cost} AP"
 
 
 class TitlePage(Screen):
@@ -44,20 +55,26 @@ class GameScreen(Screen):
             self.app.pop_screen()
 
 class TaskListAP(Container):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tasks = [
+            Task("T1", "Investigate B3", 1),
+            Task("T2", "Fertilize D4", 1),
+            Task("T3", "Irrigate ALL 20mm", 2)
+        ]
+    
     def compose(self) -> ComposeResult:
+        yield Label("Tasks:", id="tasks_title")
+        
         taskGrid = Grid(
-            Label("T1", classes="task_id"),
-            Label("Investigate B3", classes="task_desc"),
-            Label("1 AP", classes="task_cost"),
-            Label("T2", classes="task_id"),
-            Label("Fertilize D4", classes="task_desc"),
-            Label("1 AP", classes="task_cost"),
-            Label("T3", classes="task_id"),
-            Label("Irrigate ALL 20mm", classes="task_desc"),
-            Label("2 AP", classes="task_cost"),
+            *[widget for task in self.tasks 
+              for widget in (
+                  Label(task.id, classes="task_id"),
+                  Label(task.description, classes="task_desc"),
+                  Label(task.cost_str, classes="task_cost")
+              )],
             classes="task_grid_list"
         )
-        yield Label("Tasks:", id="tasks_title")
         yield taskGrid
 
 class CommandLine(Input):
