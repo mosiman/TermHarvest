@@ -112,6 +112,21 @@ Journal {
     grid-gutter: 0;
 }
 
+.moistureplot {
+    layout: grid;
+    grid-size: 4 4;
+    grid-columns: 8 8 8 8;
+    grid-rows: 4 4 4 4;
+    width: auto;
+    /* min-width: 20%; */
+    height: auto;
+    min-height: 20;
+    border: solid green;
+    margin: 0;
+    padding: 1;
+    grid-gutter: 0;
+}
+
 .farmplot {
     layout: grid;
     grid-size: 4 4;

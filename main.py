@@ -127,6 +127,7 @@ class GameScreen(Screen[object]):
                 yield HorizontalGroup(
                     WeatherWidget(aquacrop_manager, id="weather_widget"),
                     NDVIDataWidget(aquacrop_manager, id="ndvi_widget", classes="ndviplot"),
+                    SoilMoistureWidget(aquacrop_manager, id="moisture_widget", classes="moistureplot"),
                 )
 
     def on_mount(self) -> None:
@@ -140,6 +141,7 @@ class GameScreen(Screen[object]):
         # Update farm plot colors after mounting with a small delay
         self.set_timer(0.1, self.update_farm_plot_colors)
         self.set_timer(0.1, self.update_ndvi_plot_colors)
+        self.set_timer(0.1, self.update_moisture_plot_colors)
         
     @on(TabbedContent.TabActivated)
     def on_tab_activated(self, event: TabbedContent.TabActivated) -> None:
@@ -163,6 +165,13 @@ class GameScreen(Screen[object]):
         ndvi_plot = self.query_one(".ndviplot", NDVIDataWidget)
         if ndvi_plot:
             ndvi_plot.update_sector_colors()
+
+    def update_moisture_plot_colors(self) -> None:
+        """Update moisture plot colors after components are mounted"""
+        log.info("Updating moisture plot colours")
+        moisture_plot = self.query_one(".moistureplot", SoilMoistureWidget)
+        if moisture_plot:
+            moisture_plot.update_sector_colors()
 
     def handle_tab_switch(self, command: str) -> None:
         """Handle /tab [tab_name] command"""
@@ -506,6 +515,65 @@ class Journal(VerticalScroll):
         self.query(JournalEntry).remove()
         for entry in self.entries:
             self.mount(entry)
+
+class SoilMoistureWidget(Grid):
+    """ The farm plot is hardcoded to be 4x4 for the purposes of this hackathon """
+
+    def __init__(self, aquacrop_manager: AquaCropManager, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.aquacrop_manager = aquacrop_manager
+
+    def compose(self) -> ComposeResult:
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        height = 4
+        width = 4
+
+        #total accessible water
+        taw = self.aquacrop_manager.get_current_hydration()
+
+        grid = [
+                [ Label(f"{taw[row + str(col)]:.1f}", id=f"moistureplot_{row}{col}", classes="sector") for col in range(1,width+1)]
+            for row in alphabet[0:height]
+        ]
+        for r in range(0, height):
+            for c in range(0, width):
+                yield grid[r][c]
+        
+        # Initial color update
+        self.update_sector_colors()
+
+    def interpolate_color(self, value: float) -> str:
+        # Convert hex colors to RGB components
+        start_color = (0x67, 0x85, 0x98) # #678598
+        end_color = (0x14, 0x96, 0xf4) # #1496f4
+        
+        # typical theta 0.2 - 0.5
+        # Clamp value between 0 and 1
+        value = max(0.1, min(0.5, value))
+        normalized_value = (value - 0.1) / (0.5 - 0.1)
+        
+        # Interpolate each RGB component
+        r = int(start_color[0] + (end_color[0] - start_color[0]) * normalized_value)
+        g = int(start_color[1] + (end_color[1] - start_color[1]) * normalized_value)
+        b = int(start_color[2] + (end_color[2] - start_color[2]) * normalized_value)
+        
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def update_sector_colors(self) -> None:
+        """Update sector background colors based on canopy cover values"""
+        log.info("updating sector colours for moisture")
+        hydration = self.aquacrop_manager.get_current_hydration()
+        log.info(f"hydration: {hydration}")
+
+        for sector_id, hydration_value in hydration.items():
+            try:
+                sector_widget = self.query_one(f"#moistureplot_{sector_id}", Label)
+                color = self.interpolate_color(hydration_value)
+                sector_widget.content = f"{hydration_value:.1f}"
+                sector_widget.styles.background = color
+            except Exception:
+                # Widget might not be mounted yet
+                pass
 
 class NDVIDataWidget(Grid):
     """ The farm plot is hardcoded to be 4x4 for the purposes of this hackathon """

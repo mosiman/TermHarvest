@@ -169,8 +169,8 @@ class AquaCropManager:
                 for sector_id, sector in self.sectors.items()}
 
     def get_current_hydration(self) -> dict[str, float]:
-        """Get current canopy cover for each sector"""
-        return {sector_id: sector.model._init_cond.biomass 
+        """Get top level theta (hydration) for each sector"""
+        return {sector_id: sector.model._init_cond.th[0]
                 for sector_id, sector in self.sectors.items()}
     
     def get_current_season(self) -> int:
