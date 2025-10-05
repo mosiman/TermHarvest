@@ -147,3 +147,35 @@ HelpModal > Container {
     width: auto;
     align-horizontal: center;
 }
+
+#tabs_container {
+    width: 100%;
+    height: 60%;
+    min-height: 20;
+    margin-bottom: 1;
+}
+
+TabbedContent {
+    width: 100%;
+    height: 100%;
+    border: solid $accent;
+}
+
+TabPane {
+    padding: 1;
+}
+
+TabbedContent > .tabbed-content--tabs {
+    background: $surface;
+    border-bottom: solid $accent;
+}
+
+TabbedContent > .tabbed-content--tabs > .tab--active {
+    background: $primary;
+    color: $text;
+}
+
+TabbedContent > .tabbed-content--content {
+    width: 100%;
+    height: 100%;
+}
