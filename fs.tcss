@@ -1,0 +1,61 @@
+#titlepage_menu_btns_grp {
+    width: auto;
+    background: $boost;
+}
+
+#titlescreen {
+    width: 100%;
+    height: 100%;
+    align: center middle;
+}
+
+#game_title {
+    width: 100%;
+    height: auto;
+    border: solid green;
+    align: center middle;
+    content-align-horizontal: center;
+}
+
+.task_list {
+    border: solid orange;
+    width: 30%;
+    height: 50%;
+}
+
+JournalEntry {
+    border: solid blue;
+}
+
+Journal {
+    height: 50%;
+}
+
+.task_grid_list {
+    layout: grid;
+    grid-size: 3 4;
+    grid-rows: 2 2 2 2;
+    grid-columns: 1fr 1fr 1fr;
+    width: 100%;
+    height: 100%;
+
+}
+
+.farmplot {
+    layout: grid;
+    grid-size: 4 4;
+    grid-rows: 5 5 5 5 ;
+    grid-columns: 10 10 10 10;
+    width: auto;
+    height: auto;
+    border: solid yellow;  /* Optional: to see the grid boundaries */
+}
+
+.sector {
+    height: 100%;  /* Fill the grid cell */
+    width: 100%;   /* Fill the grid cell */
+    border: solid green;
+    background: blue;
+    color: white;  /* Make text visible on blue background */
+    content-align: center middle;  /* Center the text */
+}
